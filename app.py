@@ -68,22 +68,27 @@ elif not transcript:
     st.info("文字起こしテキストを貼り付けてください。")
 
 if generate_button:
-    with st.spinner("議事録を生成中..."):
-        try:
-            minutes = generate_minutes(
+    try:
+        st.divider()
+        st.subheader("議事録を生成中...")
+
+        minutes = st.write_stream(
+            generate_minutes(
                 transcript=transcript,
                 title=meeting_title,
                 meeting_date=meeting_date.strftime("%Y年%m月%d日"),
                 participants=participants,
                 additional_notes=additional_notes,
             )
+        )
 
-            st.session_state["minutes"] = minutes
-            st.session_state["meeting_title"] = meeting_title
-            st.session_state["meeting_date"] = meeting_date
+        st.session_state["minutes"] = minutes
+        st.session_state["meeting_title"] = meeting_title
+        st.session_state["meeting_date"] = meeting_date
+        st.rerun()
 
-        except Exception as e:
-            st.error(f"エラーが発生しました: {e}")
+    except Exception as e:
+        st.error(f"エラーが発生しました: {e}")
 
 if "minutes" in st.session_state:
     st.divider()

@@ -1,5 +1,5 @@
 import anthropic
-from datetime import date
+from typing import Generator
 
 
 SYSTEM_PROMPT = """あなたは優秀な議事録作成アシスタントです。
@@ -44,7 +44,7 @@ def generate_minutes(
     meeting_date: str,
     participants: str,
     additional_notes: str = "",
-) -> str:
+) -> Generator[str, None, None]:
     client = anthropic.Anthropic()
 
     user_message = f"""以下の会議の文字起こしから議事録を作成してください。
@@ -65,11 +65,12 @@ def generate_minutes(
         title=title,
     )
 
-    message = client.messages.create(
+    with client.messages.stream(
         model="claude-opus-4-6",
-        max_tokens=4096,
+        max_tokens=16000,
+        thinking={"type": "adaptive"},
         system=system,
         messages=[{"role": "user", "content": user_message}],
-    )
-
-    return message.content[0].text
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
