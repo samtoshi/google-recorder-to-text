@@ -5,6 +5,7 @@ from utils.text_corrector import correct_transcript
 from utils.minutes_generator import generate_minutes
 from utils.html_generator import generate_meeting_html, generate_index_html
 from utils.drive_manager import DriveManager
+from utils.recorder_fetcher import fetch_recorder_page
 
 load_dotenv()
 
@@ -15,7 +16,7 @@ st.set_page_config(
 )
 
 st.title("📝 Google Recorder 議事録ジェネレーター")
-st.caption("文字起こしテキストを貼り付けて、修正・議事録生成・Google Drive 保存まで自動で行います。")
+st.caption("Google Recorder の URL を入力するか、文字起こしを貼り付けて議事録を自動生成します。")
 
 # --- ステップ管理 ---
 if "step" not in st.session_state:
@@ -30,13 +31,58 @@ def reset():
 # ==============================
 if st.session_state.step >= 1:
     with st.expander("STEP 1：会議情報と文字起こしの入力", expanded=(st.session_state.step == 1)):
+
+        # --- URL 自動取得 ---
+        st.subheader("Google Recorder URL から自動取得（任意）")
+        url_col, btn_col = st.columns([4, 1])
+        with url_col:
+            recorder_url = st.text_input(
+                "URL",
+                placeholder="https://recorder.google.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                label_visibility="collapsed",
+                key="recorder_url",
+            )
+        with btn_col:
+            fetch_btn = st.button("取得", use_container_width=True, disabled=not recorder_url)
+
+        if fetch_btn and recorder_url:
+            with st.spinner("ブラウザで取得中...（初回はログインが必要です）"):
+                try:
+                    fetched = fetch_recorder_page(recorder_url)
+                    st.session_state["_fetched"] = fetched
+                    st.success("✅ 取得完了！下のフォームに自動入力しました。")
+                except Exception as e:
+                    st.error(f"取得エラー: {e}")
+
+        fetched = st.session_state.get("_fetched", {})
+        st.divider()
+
         col1, col2 = st.columns([1, 1])
 
         with col1:
             st.subheader("会議情報")
-            meeting_title = st.text_input("議題 / 会議名", placeholder="例：週次チームミーティング", key="title")
-            meeting_date = st.date_input("日付", value=date.today(), key="date")
-            meeting_time = st.time_input("時刻", value=datetime.now().replace(second=0, microsecond=0).time(), key="time")
+            meeting_title = st.text_input(
+                "議題 / 会議名", placeholder="例：週次チームミーティング",
+                value=fetched.get("title", ""), key="title",
+            )
+            # 日付
+            _default_date = date.today()
+            if fetched.get("date"):
+                try:
+                    _default_date = datetime.strptime(fetched["date"], "%Y-%m-%d").date()
+                except Exception:
+                    pass
+            meeting_date = st.date_input("日付", value=_default_date, key="date")
+
+            # 時刻
+            _default_time = datetime.now().replace(second=0, microsecond=0).time()
+            if fetched.get("time"):
+                try:
+                    _default_time = datetime.strptime(fetched["time"], "%H:%M").time()
+                except Exception:
+                    pass
+            meeting_time = st.time_input("時刻", value=_default_time, key="time")
+
             participants = st.text_input("参加者", placeholder="例：山田、鈴木、田中", key="participants")
             additional_notes = st.text_area("補足情報（任意）", placeholder="プロジェクト名、背景など", height=80, key="notes")
 
@@ -47,6 +93,7 @@ if st.session_state.step >= 1:
                 height=320,
                 placeholder="ここにテキストを貼り付け...",
                 label_visibility="collapsed",
+                value=fetched.get("transcript", ""),
                 key="transcript",
             )
             st.caption(f"{len(transcript):,} 文字")
